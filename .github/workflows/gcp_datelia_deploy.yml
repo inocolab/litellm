@@ -55,7 +55,7 @@ jobs:
             --set-env-vars="DATABASE_URL=postgresql://llmproxy:${{ secrets.LITELLM_DB_PASSWORD }}@localhost/litellm?host=/cloudsql/${{ secrets.CLOUD_SQL_CONNECTION_NAME }}" \
             --set-env-vars="STORE_MODEL_IN_DB=True" \
             --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
-            --service-account=cloud-run-sql-sa@${{ vars.PROJECT_ID }}.iam.gserviceaccount.com \
+            --service-account=cloud-run-sql-access@${{ vars.PROJECT_ID }}.iam.gserviceaccount.com \
             --max-instances=5 \
             --memory=1Gi \
             --cpu=1 \
