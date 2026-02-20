@@ -1,0 +1,71 @@
+name: "[PREPROD] Build, Push & Deploy LiteLLM"
+
+on:
+  pull_request:
+    branches:
+      - 'main'
+jobs:
+  PREPROD-build-push-deploy:
+    name: "[PREPROD] 🔨🐳🚀 Build, Push & Deploy LiteLLM"
+    runs-on: ubuntu-latest
+    environment:
+      name: preprod
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.TOKEN_REGISTRY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-west9-docker.pkg.preprod
+
+      - name: Set image tag
+        id: vars
+        run: |
+          echo "tag=$(date +'%Y%m%d')-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build -f Dockerfile.datelia -t ${{ vars.REGISTRY }}/litellm-proxy-preprod:${{ steps.vars.outputs.tag }} .
+          docker tag ${{ vars.REGISTRY }}/litellm-proxy-preprod:${{ steps.vars.outputs.tag }} ${{ vars.REGISTRY }}/litellm-proxy-preprod:latest
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ vars.REGISTRY }}/litellm-proxy-preprod:${{ steps.vars.outputs.tag }}
+          docker push ${{ vars.REGISTRY }}/litellm-proxy-preprod:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy litellm-proxy-preprod \
+            --image=${{ vars.REGISTRY }}/litellm-proxy-preprod:${{ steps.vars.outputs.tag }} \
+            --region=${{ vars.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --add-cloudsql-instances=${{ secrets.CLOUD_SQL_CONNECTION_NAME }} \
+            --set-env-vars="DATABASE_URL=postgresql://llmproxy:${{ secrets.LITELLM_DB_PASSWORD }}@localhost/litellm?host=/cloudsql/${{ secrets.CLOUD_SQL_CONNECTION_NAME }}" \
+            --set-env-vars="STORE_MODEL_IN_DB=True" \
+            --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
+            --set-env-vars="LITELLM_MASTER_KEY=${{ secrets.LITELLM_MASTER_KEY }}" \
+            --set-env-vars="LITELLM_SALT_KEY=${{ secrets.LITELLM_SALT_KEY }}" \
+            --service-account=cloud-run-sql-access@${{ vars.PROJECT_ID }}.iam.gserviceaccount.com \
+            --max-instances=5 \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --port=4000
+
+      - name: Get LiteLLM URL
+        run: |
+          URL=$(gcloud run services describe litellm-proxy-preprod --region=${{ vars.REGION }} --format='value(status.url)')
+          echo "✅ LiteLLM deployed successfully!"
+          echo "📍 URL: $URL"
+          echo "⚠️  Add this URL to FastAPI secrets as LITELLM_BASE_URL"
