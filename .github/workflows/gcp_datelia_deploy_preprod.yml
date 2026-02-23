@@ -57,8 +57,8 @@ jobs:
             --set-env-vars="LITELLM_MASTER_KEY=${{ secrets.LITELLM_MASTER_KEY }}" \
             --set-env-vars="LITELLM_SALT_KEY=${{ secrets.LITELLM_SALT_KEY }}" \
             --service-account=cloud-run-sql-access@${{ vars.PROJECT_ID }}.iam.gserviceaccount.com \
-            --max-instances=5 \
-            --memory=1Gi \
+            --max-instances=1 \
+            --memory=2Gi \
             --cpu=1 \
             --timeout=300 \
             --port=4000
